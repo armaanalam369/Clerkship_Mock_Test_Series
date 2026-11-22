@@ -1,576 +1,108 @@
-/* ============================================================
-   WBPSC CLERKSHIP PYQs — QUIZ ENGINE v2
-   Adding a paper never needs edits here:
-     1. create data/<name>.js calling registerPYQ(year, questions, meta)
-     2. list "<name>" in data/manifest.js:  const PYQ_YEARS = ["2019", "2019-shift2"];
-   meta (all optional): { shift:"Shift 2", name:"...", durationMin:60, marks:{correct:1, wrong:0.25} }
-   question (optional extras): difficulty, tags[], source, verified:false, originalNumber
-   ============================================================ */
-"use strict";
+(()=>{'use strict';
+const R=window.RULES,SETS=window.SETS,$=s=>document.querySelector(s);
+const K='ck2_',ld=(k,d)=>{try{const v=JSON.parse(localStorage.getItem(K+k));return v==null?d:v}catch(e){return d}},sv=(k,v)=>{try{localStorage.setItem(K+k,JSON.stringify(v))}catch(e){}};
+const D={att:ld('att',[]),days:ld('days',{}),notes:ld('notes',[]),plan:ld('plan',{})},save=k=>sv(k,D[k]);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const p2=n=>String(n).padStart(2,'0'),dk=d=>{d=d||new Date();return d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate())};
+const pct=(a,b)=>b?Math.round(a*100/b):0,fmt=s=>p2(Math.floor(s/60))+':'+p2(s%60);
+const shuf=a=>a.map(x=>[Math.random(),x]).sort((x,y)=>x[0]-y[0]).map(x=>x[1]);
+const toast=m=>{const t=$('#toast');t.textContent=m;t.className='show';clearTimeout(toast.h);toast.h=setTimeout(()=>t.className='',2200)};
+let tab='home',run=null,last=null,cache={},nq='';
+document.body.insertAdjacentHTML('afterbegin','<svg width="0" height="0" style="position:absolute"><defs><linearGradient id="gr"><stop offset="0" stop-color="#7c6bff"/><stop offset="1" stop-color="#22d3ee"/></linearGradient></defs></svg>');
 
-const CONFIG = {
-  sectionOrder: ["English","Ancient History","Medieval History","Modern History","West Bengal Specific","Indian Geography","Physical & World Geography","Arts & Culture","Indian Polity","Indian Economy","Physics","Chemistry","Biology","Static GK","Current Affairs","Aptitude & Mental Ability"],                 // optional preferred section order; others follow as found in data
-  defaultMarks: { correct: 1, wrong: 0.25 },
-  defaultDurationMin: 60,
-  dailyGoal: 25,                    // questions per day
-  strongFrom: 75, weakBelow: 50, minAttemptsForLabel: 5,
-  srsDays: [1, 3, 7, 14, 30]        // spaced-repetition gaps for questions you got wrong
-};
-const K = { hist: "pyq_history_v2", oldHist: "pyq_history_v1", oldTheme: "pyq_theme_v1", prefs: "pyq_prefs_v2",
-  bm: "pyq_bookmarks_v2", notes: "pyq_notes_v2", srs: "pyq_srs_v2", days: "pyq_days_v2", prog: "pyq_progress_v2", ver: "pyq_schema" };
+/* ---------- data helpers ---------- */
+const load=id=>cache[id]?Promise.resolve(cache[id]):new Promise((ok,no)=>{const s=SETS.find(x=>x.id===id),e=document.createElement('script');e.src=s.file;e.onload=()=>{const p=(window.PAPERS||{})[id];p?ok(cache[id]=p.questions.map((q,i)=>Object.assign({},q,{set:id,i}))):no()};e.onerror=no;document.head.appendChild(e)});
+const agg=()=>{const g={};D.att.forEach(a=>{for(const t in a.tp){g[t]=g[t]||{c:0,t:0};g[t].c+=a.tp[t].c;g[t].t+=a.tp[t].t}});return g};
+const weak=()=>{const g=agg();return R.topics.map(t=>[t,g[t]&&g[t].t?pct(g[t].c,g[t].t):50]).sort((a,b)=>a[1]-b[1])};
+const today=()=>(D.days[dk()]||{q:0}).q;
+const streak=()=>{let n=0,d=new Date();if(!today())d.setDate(d.getDate()-1);while((D.days[dk(d)]||{q:0}).q>0){n++;d.setDate(d.getDate()-1)}return n};
+const left=()=>D.plan.date?Math.ceil((new Date(D.plan.date+'T00:00')-new Date(dk()+'T00:00'))/864e5):null;
+const phase=()=>{const l=left();return l===null||l<0?null:l>60?['Build',1]:l>15?['Practice',1.2]:['Revise',.8]};
+const target=()=>{const p=phase();return p?Math.round(R.dailyGoal*p[1]):R.dailyGoal};
+const ring=(p,txt)=>`<div class="ring"><svg viewBox="0 0 120 120"><circle class="t" cx="60" cy="60" r="52"/><circle class="f" cx="60" cy="60" r="52" style="--o:${Math.round(327*(1-Math.min(1,p)))}"/></svg><b>${txt}</b></div>`;
+const bars=g=>R.topics.filter(t=>g[t]&&g[t].t).map(t=>{const p=pct(g[t].c,g[t].t);return `<div class="br"><span>${esc(t.split(' ')[0]+(t.split(' ')[1]?' '+t.split(' ')[1]:''))}</span><div class="bar"><i style="width:${p}%"></i></div><span>${p}%</span></div>`}).join('')||'<p class="mu">Take a test to see topic accuracy.</p>';
 
-/* ---------- utilities ---------- */
-const $ = id => document.getElementById(id);
-const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const rich = s => esc(s).replace(/\n/g, "<br>");
-const shuffle = a => { a = [...a]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
-const load = (k, d) => { try { const v = JSON.parse(localStorage.getItem(k)); return v ?? d; } catch (e) { return d; } };
-const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { toast("Storage is full or blocked, so progress may not be saved."); } };
-const fmt = s => `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, "0")}s`;
-const clock = s => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
-const today = () => new Date().toLocaleDateString("en-CA");
-const num = (v, d) => { const n = parseFloat(v); return isNaN(n) ? d : n; };
-const slug = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-const normalize = t => (t || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-const pct = (a, b) => b ? Math.round(a / b * 100) : 0;
-const KEYL = "ABCD";
+/* ---------- views ---------- */
+const nav=[['home','🏠','Home'],['drill','⚡','Drill'],['plan','🎯','Plan'],['notes','📝','Notes'],['stats','📊','Stats']];
+function dock(){$('#dock').innerHTML=nav.map(n=>`<button class="${tab===n[0]?'on':''}" data-a="tab" data-v="${n[0]}"><span>${n[1]}</span>${n[2]}</button>`).join('')}
+function show(h){$('#app').innerHTML='<section class="v">'+h+'</section>';window.scrollTo(0,0)}
+function view(){document.body.classList.remove('inrun');dock();({home,drill,plan,notes,stats})[tab]()}
+function home(){const g=target(),l=left(),b=agg();
+ show(`<div class="card hero">${ring(today()/g,today())}<div><h1>Today</h1><p class="mu" style="margin:0">${today()} of ${g} questions · 🔥 ${streak()} day streak${l!==null&&l>=0?' · '+l+' days to exam':''}</p></div></div>
+ <div class="card drill"><h3>⚡ Wise Drill</h3><p>10 minutes. 15 questions picked from your weakest topics.</p><button class="btn" data-a="drill">Start drill</button></div>
+ <h3 style="margin:16px 4px 8px">Question sets</h3>${SETS.map(s=>{const bs=D.att.filter(a=>a.label===s.name&&a.kind==='test').reduce((m,a)=>Math.max(m,pct(a.c,a.n)),0);return `<div class="card set"><div><b>${esc(s.name)}</b><br><small>${bs?'Best test accuracy '+bs+'%':'Not attempted yet'}</small></div><div style="display:flex;gap:8px"><button class="btn s" data-a="test" data-v="${s.id}">Timed test</button><button class="btn s g" data-a="quiz" data-v="${s.id}">Quiz</button></div></div>`}).join('')}`)}
+function drill(){const done=(D.days[dk()]||{}).drill;
+ show(`<div class="card drill"><h1>⚡ Wise Drill</h1><p>One short sitting a day: 10 minutes, 15 questions from your weakest topics, instant answers.</p><p>${done?'✅ Done today — go again to improve more.':'Not done today yet.'}</p><button class="btn" data-a="drill">${done?'Drill again':'Start today\'s drill'}</button></div>
+ <div class="card"><h3>Your weakest topics</h3>${weak().slice(0,4).map(w=>`<div class="br"><span>${esc(w[0])}</span><div class="bar"><i style="width:${w[1]}%"></i></div><span>${w[1]}%</span></div>`).join('')}</div>`)}
+function plan(){const p=D.plan,l=left(),ph=phase(),w=weak().map(x=>x[0]);
+ let body='<p class="mu">Set your exam date to get a daily target and a weekly plan.</p>';
+ if(ph){const wk=Object.keys(D.days).filter(k=>(Date.now()-new Date(k+'T00:00'))/864e5<7).reduce((n,k)=>n+D.days[k].q,0);
+ body=`<div class="hero">${ring(Math.max(0,1-l/180),l)}<div><h3>${l} days to go</h3><p class="mu" style="margin:0">Phase: <b>${ph[0]}</b> · target <b>${target()}</b> questions a day</p></div></div>
+ <p>This week: ${wk} / ${target()*7}</p><div class="bar"><i style="width:${Math.min(100,pct(wk,target()*7))}%"></i></div>
+ <h3 style="margin-top:16px">Weekly rhythm</h3>${['Mon','Tue','Wed','Thu','Fri'].map((d,i)=>`<div class="day"><b>${d}</b><span>${esc(w[i])} · ${target()} Q</span></div>`).join('')}<div class="day"><b>Sat</b><span>Full timed test</span></div><div class="day"><b>Sun</b><span>Revise notes + Wise Drill</span></div>`}
+ else if(l!==null&&l<0)body='<p class="mu">That exam date has passed — set a new one below.</p>';
+ show(`<div class="card"><h1>🎯 Exam plan</h1>${body}</div><div class="card"><h3>Exam details</h3><input id="pn" placeholder="Exam name" value="${esc(p.name||R.name)}"><input id="pd" type="date" value="${p.date||''}"><div class="row"><button class="btn" data-a="saveplan">Save plan</button></div></div>`)}
+function noteList(){const q=nq.toLowerCase(),L=D.notes.filter(n=>!q||(n.x+n.t).toLowerCase().includes(q)).sort((a,b)=>b.pin-a.pin||b.id-a.id);
+ return L.map(n=>`<div class="card note"><span class="tag">${esc(n.t)}</span> <small>${n.d}</small><p>${esc(n.x)}</p><button class="btn s g" data-a="pin" data-v="${n.id}">${n.pin?'📌 Pinned':'Pin'}</button> <button class="btn s g" data-a="del" data-v="${n.id}">Delete</button></div>`).join('')||'<p class="mu" style="text-align:center">No notes yet. Save mistakes from your results, or write one above.</p>'}
+function notes(){show(`<div class="card"><h1>📝 Smart notes</h1><p class="mu" style="margin:0">Mistakes you save from results land here, tagged by topic.</p><select id="nt">${R.topics.map(t=>`<option>${esc(t)}</option>`).join('')}</select><textarea id="nx" rows="3" placeholder="Write a quick note…"></textarea><div class="row"><button class="btn" data-a="addnote">Save note</button></div></div><input id="ns" placeholder="🔍 Search notes" value="${esc(nq)}"><div id="nl" style="margin-top:12px">${noteList()}</div>`)}
+function heat(){const t=new Date(),s=new Date(t);s.setDate(s.getDate()-(16*7+t.getDay()));let h='',i=0;for(const d=new Date(s);d<=t;d.setDate(d.getDate()+1),i++){const q=(D.days[dk(d)]||{q:0}).q,l=q>=50?4:q>=30?3:q>=10?2:q>0?1:0;h+=`<i class="${l?'l'+l:''}" style="--d:${i*8}ms" title="${dk(d)}: ${q} Q"></i>`}return `<div class="hm">${h}</div><p class="mu" style="margin:8px 0 0;font-size:12px">Last 17 weeks · darker = more questions</p>`}
+function trend(){const A=D.att.slice(-10);if(A.length<2)return '<p class="mu">Complete two tests to see your trend.</p>';const pts=A.map((a,i)=>[10+i*280/(A.length-1),80-pct(a.c,a.n)*.7]);return `<svg class="trend" viewBox="0 0 300 90"><path pathLength="1" d="M${pts.map(p=>p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' L')}"/></svg>`}
+function stats(){const A=D.att,c=A.reduce((n,a)=>n+a.c,0),t=A.reduce((n,a)=>n+a.c+a.w,0),qs=Object.values(D.days).reduce((n,d)=>n+d.q,0);
+ show(`<div class="tiles"><div class="card tile"><b>${A.length}</b><small>tests & drills</small></div><div class="card tile"><b>${pct(c,t)}%</b><small>accuracy</small></div><div class="card tile"><b>${qs}</b><small>questions solved</small></div><div class="card tile"><b>🔥 ${streak()}</b><small>day streak</small></div></div>
+ <div class="card"><h3>Accuracy trend</h3>${trend()}</div><div class="card"><h3>Topic accuracy</h3>${bars(agg())}</div><div class="card"><h3>Activity heatmap</h3>${heat()}</div><button class="btn" style="width:100%" data-a="pdf">📄 Export PDF report</button>`)}
 
-function toast(msg) {
-  const t = document.createElement("div"); t.className = "toast"; t.textContent = msg; $("toasts").appendChild(t);
-  setTimeout(() => t.classList.add("out"), 2600); setTimeout(() => t.remove(), 3000);
-}
-function confirmModal(title, html, ok = "Confirm", cancel = "Cancel") {
-  return new Promise(res => {
-    const m = $("modal");
-    m.innerHTML = `<div class="modal-box" role="dialog" aria-modal="true"><h3>${esc(title)}</h3><div>${html}</div>
-      <div class="modal-actions">${cancel ? `<button class="btn" data-m="0">${esc(cancel)}</button>` : ""}<button class="btn primary" data-m="1">${esc(ok)}</button></div></div>`;
-    m.classList.remove("hidden");
-    m.onclick = e => { const b = e.target.closest("[data-m]"); if (!b && e.target !== m) return; m.classList.add("hidden"); m.onclick = null; res(!!b && b.dataset.m === "1"); };
-  });
-}
+/* ---------- test / quiz / drill ---------- */
+async function start(kind,id){let qs,label,secs=0;
+ try{if(kind==='drill'){const all=(await Promise.all(SETS.map(s=>load(s.id).catch(()=>[])))).flat();if(!all.length)return toast('No questions found');const w=Object.fromEntries(weak());qs=shuf(all).sort((a,b)=>(w[a.s]==null?50:w[a.s])-(w[b.s]==null?50:w[b.s])).slice(0,15);label='Wise Drill';secs=600}
+ else{qs=await load(id);label=SETS.find(s=>s.id===id).name;if(kind==='test')secs=Math.ceil(qs.length*R.minutes*60/100);else qs=shuf(qs)}}
+ catch(e){return toast('Could not load that set — check data/manifest.js')}
+ run={kind,qs,label,ans:qs.map(()=>null),cur:0,left:secs,timed:secs>0,t0:Date.now()};
+ clearInterval(run.h);run.h=setInterval(()=>{if(!run.timed)return;run.left--;const e=$('#tm');if(e)e.textContent=fmt(run.left);if(run.left<=0){toast('Time is up');submit()}},1000);qv()}
+function qv(){const r=run,q=r.qs[r.cur],a=r.ans[r.cur],lock=r.kind!=='test'&&a!==null;document.body.classList.add('inrun');
+ $('#app').innerHTML=`<section class="v"><div class="rtop"><button class="btn s g" data-a="exit">✕ Exit</button><span>${esc(r.label)}</span>${r.timed?`<b id="tm" class="tm">${fmt(r.left)}</b>`:'<span></span>'}</div><div class="bar"><i style="width:${pct(r.cur+1,r.qs.length)}%"></i></div><div class="chips">${r.qs.map((_,i)=>`<b class="chip${i===r.cur?' on':r.ans[i]!==null?' dn':''}" data-a="go" data-v="${i}">${i+1}</b>`).join('')}</div>
+ <div class="card"><small>${esc(q.s)}${q.c?' · '+esc(q.c):''}</small><h2>${r.cur+1}. ${esc(q.q)}</h2>${q.o.map((t,i)=>`<button class="opt${a===i?' sel':''}${lock&&i===q.a?' ok':''}${lock&&a===i&&i!==q.a?' bad':''}" data-a="pick" data-v="${i}"><i>${'ABCD'[i]}</i>${esc(t)}</button>`).join('')}${lock&&q.e?`<p class="ex">💡 ${esc(q.e)}</p>`:''}</div>
+ <div class="row"><button class="btn g" data-a="prev">←</button><button class="btn g" data-a="clr">Clear</button><button class="btn" data-a="${r.cur<r.qs.length-1?'next':'sub'}">${r.cur<r.qs.length-1?'Next →':'Submit ✓'}</button></div></section>`;
+ const c=$('.chip.on');if(c)c.scrollIntoView({inline:'center',block:'nearest'})}
+function submit(){clearInterval(run.h);const r=run;let c=0,w=0;const tp={};
+ r.qs.forEach((q,i)=>{const a=r.ans[i];tp[q.s]=tp[q.s]||{c:0,t:0};if(a===null)return;tp[q.s].t++;if(a===q.a){c++;tp[q.s].c++}else w++});
+ const n=r.qs.length,a={id:Date.now(),d:dk(),label:r.label,kind:r.kind,n,c,w,sc:Math.round((c-w*R.neg)*100)/100,tp,sec:Math.round((Date.now()-r.t0)/1000)};
+ D.att.push(a);save('att');const dd=D.days[a.d]=D.days[a.d]||{q:0};dd.q+=c+w;if(r.kind==='drill')dd.drill=1;save('days');last=r;run=null;result(a)}
+function result(a){document.body.classList.remove('inrun');dock();const bad=last.qs.map((q,i)=>[q,i]).filter(x=>last.ans[x[1]]!==null&&last.ans[x[1]]!==x[0].a);
+ show(`<div class="card hero">${ring(a.c/a.n,pct(a.c,a.n)+'%')}<div><h1>${a.sc} marks</h1><p class="mu" style="margin:0">${a.c} right · ${a.w} wrong · ${a.n-a.c-a.w} skipped · ${fmt(a.sec)}</p></div></div><div class="card"><h3>By topic</h3>${bars(a.tp)}</div>
+ <h3 style="margin:14px 4px 8px">Review mistakes (${bad.length})</h3>${bad.map(x=>`<div class="card"><small>${esc(x[0].s)}</small><p><b>${esc(x[0].q)}</b></p><p style="color:var(--no);margin:2px 0">Your answer: ${esc(x[0].o[last.ans[x[1]]])}</p><p style="color:var(--ok);margin:2px 0">Correct: ${esc(x[0].o[x[0].a])}</p>${x[0].e?`<p class="mu">💡 ${esc(x[0].e)}</p>`:''}<button class="btn s g" data-a="savenote" data-v="${x[1]}">📝 Save to notes</button></div>`).join('')||'<p class="mu">No mistakes — brilliant!</p>'}
+ <div class="row"><button class="btn" data-a="tab" data-v="home">Home</button><button class="btn g" data-a="tab" data-v="stats">Stats</button></div>`)}
 
-/* ---------- 1. DATA REGISTRATION ---------- */
-const PAPERS = [], ALL_QUESTIONS = [], LOAD_ERRORS = [], QMAP = new Map();
-function registerPYQ(year, questions, meta = {}) {
-  const shift = meta.shift || "";
-  const paperId = shift ? `${year}-${slug(shift)}` : String(year);
-  const paper = { id: paperId, year: parseInt(year, 10) || year, shift,
-    name: meta.name || `${year}${shift ? " " + shift : ""} PYQ`,
-    durationMin: meta.durationMin || CONFIG.defaultDurationMin,
-    marks: { ...CONFIG.defaultMarks, ...(meta.marks || {}) }, count: questions.length };
-  PAPERS.push(paper);
-  questions.forEach((q, i) => {
-    const n = q.originalNumber || (i + 1);
-    ALL_QUESTIONS.push({ id: `${paperId}-Q${String(n).padStart(3, "0")}`, paperId, paperName: paper.name, year: paper.year, originalNumber: n,
-      section: q.section, question: q.question, options: q.options, correctAnswer: q.correctAnswer, explanation: q.explanation || "",
-      difficulty: q.difficulty || "Medium", tags: q.tags || [], source: q.source || "", verified: q.verified !== false, repeats: [] });
-  });
-}
-function loadDataFiles(files, done) {
-  let i = 0;
-  (function next() {
-    if (i >= files.length) return done();
-    const s = document.createElement("script"); s.src = `data/${files[i]}.js`;
-    s.onload = () => { i++; next(); };
-    s.onerror = () => { LOAD_ERRORS.push(files[i]); i++; next(); };
-    document.head.appendChild(s);
-  })();
-}
-function getSections() {
-  const seen = []; ALL_QUESTIONS.forEach(q => { if (!seen.includes(q.section)) seen.push(q.section); });
-  const pref = CONFIG.sectionOrder.filter(s => seen.includes(s));
-  return [...pref, ...seen.filter(s => !pref.includes(s))];
-}
-const paperById = id => PAPERS.find(p => p.id === id);
-const sortPool = pool => { const ix = id => PAPERS.findIndex(p => p.id === id); return [...pool].sort((a, b) => ix(a.paperId) - ix(b.paperId) || a.originalNumber - b.originalNumber); };
+/* ---------- PDF report (uses the phone's Print → Save as PDF) ---------- */
+function pdf(){const g=agg(),A=D.att.slice(-10).reverse(),c=D.att.reduce((n,a)=>n+a.c,0),t=D.att.reduce((n,a)=>n+a.c+a.w,0);
+ $('#rep').innerHTML=`<h1>${esc(D.plan.name||R.name)} · Performance report</h1><p>${new Date().toDateString()} · ${D.att.length} attempts · accuracy ${pct(c,t)}% · streak ${streak()} days${left()!==null&&left()>=0?' · '+left()+' days to exam':''}</p>
+ <h3>Topic accuracy</h3><table><tr><th>Topic</th><th>Correct</th><th>Attempted</th><th>Accuracy</th></tr>${R.topics.filter(x=>g[x]).map(x=>`<tr><td>${esc(x)}</td><td>${g[x].c}</td><td>${g[x].t}</td><td>${pct(g[x].c,g[x].t)}%</td></tr>`).join('')}</table>
+ <h3>Last attempts</h3><table><tr><th>Date</th><th>Set</th><th>Type</th><th>Score</th><th>Accuracy</th></tr>${A.map(a=>`<tr><td>${a.d}</td><td>${esc(a.label)}</td><td>${a.kind}</td><td>${a.sc}</td><td>${pct(a.c,a.c+a.w)}%</td></tr>`).join('')}</table>
+ <h3>Weakest topics</h3><p>${weak().slice(0,4).map(w=>esc(w[0])+' ('+w[1]+'%)').join(', ')}</p>`;
+ toast('Choose "Save as PDF" in the print window');setTimeout(()=>window.print(),500)}
 
-/* ---------- 2. REPEATS + VALIDATION ---------- */
-function detectRepeats() {
-  const by = new Map();
-  ALL_QUESTIONS.forEach(q => { const k = normalize(q.question); if (!by.has(k)) by.set(k, []); by.get(k).push(q); });
-  by.forEach(g => { if (g.length > 1) g.forEach(q => { q.repeats = g.filter(o => o.id !== q.id).map(o => ({ paperName: o.paperName, originalNumber: o.originalNumber })); }); });
-  return by;
-}
-function repeatedPool() {
-  const seen = new Set(), out = [];
-  ALL_QUESTIONS.forEach(q => { if (!q.repeats.length) return; const k = normalize(q.question); if (!seen.has(k)) { seen.add(k); out.push(q); } });
-  return out;
-}
-let VALIDATION = { errors: [], warns: [] };
-function validateDataset() {
-  const errors = [], warns = [], ids = new Set();
-  ALL_QUESTIONS.forEach(q => {
-    if (ids.has(q.id)) errors.push(`Duplicate id ${q.id}`); ids.add(q.id);
-    if (!q.section) errors.push(`${q.id}: missing section`);
-    if (!q.question) errors.push(`${q.id}: missing question text`);
-    if (!Array.isArray(q.options) || q.options.length !== 4) errors.push(`${q.id}: needs exactly 4 options`);
-    if (!Number.isInteger(q.correctAnswer) || q.correctAnswer < 0 || q.correctAnswer > 3) errors.push(`${q.id}: correctAnswer must be 0–3`);
-    if (!q.explanation) warns.push(`${q.id}: no explanation`);
-    if (!q.verified) warns.push(`${q.id}: answer key marked unverified`);
-  });
-  PAPERS.forEach(p => {
-    const seen = new Map();
-    ALL_QUESTIONS.filter(q => q.paperId === p.id).forEach(q => { const k = normalize(q.question); if (seen.has(k)) warns.push(`${q.id}: same text as ${seen.get(k)} in the same paper`); else seen.set(k, q.id); });
-  });
-  LOAD_ERRORS.forEach(f => errors.push(`Could not load data/${f}.js (check the file name in manifest.js)`));
-  return { errors, warns };
-}
+/* ---------- rough pad + calculator ---------- */
+const P={st:[],cur:null,er:0,ex:''};
+function redraw(){const cv=$('#cv'),x=cv.getContext('2d');x.clearRect(0,0,cv.width,cv.height);const ink=getComputedStyle(document.documentElement).getPropertyValue('--tx').trim()||'#fff';P.st.forEach(s=>{x.globalCompositeOperation=s.e?'destination-out':'source-over';x.strokeStyle=ink;x.lineWidth=s.e?22:3;x.lineCap=x.lineJoin='round';x.beginPath();s.p.forEach((p,i)=>i?x.lineTo(p[0],p[1]):x.moveTo(p[0],p[1]));x.stroke()})}
+function pad(){const p=$('#pad');p.className='pad show';p.innerHTML=`<div class="pt"><button data-a="pen" class="${P.er?'':'on'}">✏️</button><button data-a="era" class="${P.er?'on':''}">🧽</button><button data-a="und">↩️</button><button data-a="pclr">🗑️</button><button data-a="calc">🧮</button><button data-a="pclose">✕</button></div><canvas id="cv"></canvas><div class="calc" id="cl"><div id="cd">0</div>${'7 8 9 ÷ 4 5 6 × 1 2 3 − 0 . = +'.split(' ').map(k=>`<button data-a="ck" data-v="${k}">${k}</button>`).join('')}<button data-a="ck" data-v="C">C</button></div>`;
+ const cv=$('#cv');cv.width=cv.clientWidth;cv.height=cv.clientHeight;redraw();const pt=e=>{const b=cv.getBoundingClientRect();return [e.clientX-b.left,e.clientY-b.top]};
+ cv.onpointerdown=e=>{cv.setPointerCapture(e.pointerId);P.cur={e:P.er,p:[pt(e)]};P.st.push(P.cur);redraw()};cv.onpointermove=e=>{if(P.cur){P.cur.p.push(pt(e));redraw()}};cv.onpointerup=()=>{P.cur=null}}
+function calc(k){if(k==='C')P.ex='';else if(k==='='){try{const s=P.ex.replace(/×/g,'*').replace(/÷/g,'/').replace(/−/g,'-');if(/^[0-9+\-*/. ]+$/.test(s))P.ex=String(Math.round(Function('return '+s)()*1e8)/1e8)}catch(e){P.ex='Error'}}else P.ex=(P.ex==='Error'?'':P.ex)+k;$('#cd').textContent=P.ex||'0'}
 
-/* ---------- 3. STORAGE, PREFS, MIGRATION ---------- */
-const getHistory = () => load(K.hist, []);
-function migrate() {
-  if (!localStorage.getItem(K.hist) && localStorage.getItem(K.oldHist)) save(K.hist, load(K.oldHist, []));
-  const t = localStorage.getItem(K.oldTheme);
-  if (t && !localStorage.getItem(K.prefs)) save(K.prefs, { theme: t, font: 1 });
-  localStorage.setItem(K.ver, "2");
-}
-let prefs = { theme: null, font: 1 };
-function applyPrefs() {
-  prefs = { ...prefs, ...load(K.prefs, {}) };
-  const dark = (prefs.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")) === "dark";
-  document.body.classList.toggle("dark", dark);
-  $("theme-toggle").textContent = dark ? "Light" : "Dark";
-  document.documentElement.style.fontSize = (16 * prefs.font) + "px";
-}
-const setPref = (k, v) => { prefs[k] = v; save(K.prefs, prefs); applyPrefs(); };
-
-/* ---------- 4. DERIVED STATS ---------- */
-const pid = h => h.paperId || (h.year !== undefined && h.year !== null ? String(h.year) : null);
-function latestStatuses() {
-  const m = new Map();
-  getHistory().forEach(r => {
-    const om = new Map((r.optionOrder || []).map(o => [o.id, o]));
-    (r.questionIds || []).forEach(id => {
-      if (m.has(id)) return;
-      const a = r.answers?.[id], o = om.get(id);
-      m.set(id, a === undefined ? "unanswered" : (o && a === o.correctAnswer ? "correct" : "incorrect"));
-    });
-  });
-  return m;
-}
-function sectionStats() {
-  const s = {};
-  getHistory().forEach(r => Object.entries(r.sectionBreakdown || {}).forEach(([k, b]) => {
-    s[k] = s[k] || { total: 0, attempted: 0, correct: 0, timeSec: 0 };
-    s[k].total += b.total; s[k].attempted += b.attempted; s[k].correct += b.correct; s[k].timeSec += b.timeSec || 0;
-  }));
-  return s;
-}
-function streaks(days) {
-  const ds = Object.keys(days).filter(d => days[d] > 0).sort(); let best = 0, run = 0, prev = null;
-  ds.forEach(d => { run = prev && Math.round((new Date(d) - new Date(prev)) / 864e5) === 1 ? run + 1 : 1; best = Math.max(best, run); prev = d; });
-  const y = new Date(Date.now() - 864e5).toLocaleDateString("en-CA");
-  return { current: prev === today() || prev === y ? run : 0, best };
-}
-function addDay(n) { const d = load(K.days, {}); d[today()] = (d[today()] || 0) + n; save(K.days, d); }
-function badgeDefs() {
-  const h = getHistory(), st = streaks(load(K.days, {})), answered = h.reduce((s, r) => s + (r.attempted || 0), 0);
-  return [
-    { id: "first", name: "First steps", desc: "Finish a test", ok: h.length >= 1 },
-    { id: "c100", name: "Centurion", desc: "Answer 100 questions", ok: answered >= 100 },
-    { id: "sharp", name: "Sharp shooter", desc: "Score 80%+ on a test of 20+ questions", ok: h.some(r => r.scorePercent >= 80 && r.totalQuestions >= 20) },
-    { id: "full", name: "Full paper", desc: "Finish a whole paper in exam mode", ok: h.some(r => ["paper", "pyq"].includes(r.type) && (r.mode || "exam") === "exam" && r.totalQuestions >= (paperById(pid(r))?.count ?? 1e9)) },
-    { id: "s3", name: "On a roll", desc: "3-day streak", ok: st.best >= 3 },
-    { id: "s7", name: "Week warrior", desc: "7-day streak", ok: st.best >= 7 }
-  ];
-}
-function updateSRS(qs, answers) {
-  const srs = load(K.srs, {}), now = Date.now();
-  qs.forEach(q => {
-    const a = answers[q.id]; if (a === undefined) return;
-    if (a !== q.correctAnswer) srs[q.id] = { box: 0, due: now + CONFIG.srsDays[0] * 864e5 };
-    else if (srs[q.id]) { const b = srs[q.id].box + 1; if (b >= CONFIG.srsDays.length) delete srs[q.id]; else srs[q.id] = { box: b, due: now + CONFIG.srsDays[b] * 864e5 }; }
-  });
-  save(K.srs, srs);
-}
-const dueQuestions = () => { const srs = load(K.srs, {}), now = Date.now(); return Object.entries(srs).filter(([id, v]) => v.due <= now && QMAP.has(id)).map(([id]) => QMAP.get(id)); };
-const mistakeQuestions = () => [...latestStatuses()].filter(([id, s]) => s === "incorrect" && QMAP.has(id)).map(([id]) => QMAP.get(id));
-const savedQuestions = () => Object.keys(load(K.bm, {})).filter(id => QMAP.has(id)).map(id => QMAP.get(id));
-
-/* ---------- 5. VIEWS ---------- */
-let activeQuiz = null, pendingTest = null, currentRecord = null, timerId = null, reviewF = "all";
-function showView(name) {
-  document.querySelectorAll(".view").forEach(v => v.classList.add("hidden"));
-  const v = $("view-" + name); v.classList.remove("hidden", "fade"); void v.offsetWidth; v.classList.add("fade");
-  document.body.dataset.view = name; if (name !== "quiz") document.body.classList.remove("focus");
-  window.scrollTo(0, 0);
-}
-const RENDER = { dashboard: () => renderDashboard(), custom: () => renderCustomBuilder(), stats: () => renderStats(), saved: () => renderSaved(), history: () => renderHistory(), datacheck: () => renderDataCheck() };
-function goView(name) { RENDER[name](); showView(name); }
-function leaveQuiz(then) {
-  if (!activeQuiz) return then();
-  confirmModal("Leave this test?", "<p>Your progress is saved. You can resume from the dashboard.</p>", "Leave").then(ok => {
-    if (!ok) return; saveProgress(); clearInterval(timerId); activeQuiz = null; then();
-  });
-}
-const repeatChip = q => q.repeats.length ? `<span class="chip warn" title="${esc("Also in: " + q.repeats.map(r => r.paperName + " Q" + r.originalNumber).join("; "))}">Repeated in ${q.repeats.length + 1} papers</span>` : "";
-
-/* ---------- 6. DASHBOARD ---------- */
-function renderDashboard() {
-  const hist = getHistory(), sections = getSections(), days = load(K.days, {}), st = streaks(days);
-  const todayN = days[today()] || 0, goal = CONFIG.dailyGoal, prog = load(K.prog, null), ss = sectionStats();
-  const counts = { due: dueQuestions().length, mis: mistakeQuestions().length, sav: savedQuestions().length, rep: repeatedPool().length };
-  const quick = (act, attrs, icon, label, sub, off) => `<button class="quick" data-act="${act}" ${attrs} ${off ? "disabled" : ""}><span class="q-ico">${icon}</span><span><b>${label}</b><small>${sub}</small></span></button>`;
-  const byYear = {}; PAPERS.forEach(p => (byYear[p.year] = byYear[p.year] || []).push(p));
-  const years = Object.keys(byYear).sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
-
-  const paperCards = years.map(y => `
-    <div class="year-head"><h3>${esc(y)}</h3><span class="meta">${byYear[y].length} paper${byYear[y].length > 1 ? "s" : ""}</span></div>
-    <div class="card-grid">${byYear[y].map(p => {
-      const at = hist.filter(h => pid(h) === p.id && ["paper", "pyq"].includes(h.type)), best = at.length ? Math.max(...at.map(a => a.scorePercent)) : null;
-      return `<div class="card"><div class="card-row"><div class="ring" style="--p:${best || 0}"><span>${best === null ? "–" : best + "%"}</span></div>
-        <div><h3>${esc(p.name)}</h3><p class="meta">${p.count} questions, ${p.durationMin} min</p><p class="meta">+${p.marks.correct} / −${p.marks.wrong} · ${at.length ? at.length + " attempt(s)" : "Not attempted"}</p></div></div>
-        <div class="card-actions"><button class="btn primary" data-act="startPaper" data-id="${esc(p.id)}" data-mode="exam">Exam mode</button>
-        <button class="btn" data-act="startPaper" data-id="${esc(p.id)}" data-mode="practice">Practice</button></div></div>`;
-    }).join("")}</div>`).join("");
-
-  const sectionCards = sections.map((s, i) => {
-    const total = ALL_QUESTIONS.filter(q => q.section === s).length, b = ss[s], acc = b ? pct(b.correct, b.attempted) : null;
-    return `<div class="card"><h3>${esc(s)}</h3><p class="meta">${total} question${total === 1 ? "" : "s"} across all papers</p>
-      <div class="bar"><i style="width:${acc || 0}%"></i></div><p class="meta">${acc !== null ? `Accuracy ${acc}%` : "No attempts yet"}</p>
-      <div class="card-actions"><button class="btn" data-act="startSection" data-i="${i}" data-mode="practice">Practice</button><button class="btn" data-act="startSection" data-i="${i}" data-mode="exam">Timed test</button></div></div>`;
-  }).join("");
-
-  $("dashboard-body").innerHTML = `
-    <div class="hero"><div><h1>Clerkship PYQs, paper by paper</h1><p>Sit a full paper under exam conditions, drill one section, or work through the questions you keep missing.</p>
-      <div class="badges">${badgeDefs().map(b => `<span class="badge ${b.ok ? "on" : ""}" title="${esc(b.desc)}">${esc(b.name)}</span>`).join("")}</div></div>
-      <div class="goal"><p>Today's goal</p><b>${todayN} / ${goal}</b> <span>questions</span><div class="bar"><i style="width:${Math.min(100, pct(todayN, goal))}%"></i></div>
-      <p>${st.current ? `${st.current}-day streak` : "Answer a question to start a streak"}</p></div></div>
-    <div class="quick-row">
-      ${prog ? quick("resume", "", "▶", "Resume test", esc(prog.meta?.name || "In progress"), false).replace('class="quick"', 'class="quick resume"') : ""}
-      ${quick("startSpecial", 'data-kind="due"', "🔁", "Review due", `${counts.due} question(s)`, !counts.due)}
-      ${quick("startSpecial", 'data-kind="mistakes"', "🎯", "My mistakes", `${counts.mis} question(s)`, !counts.mis)}
-      ${quick("startSpecial", 'data-kind="saved"', "★", "Saved", `${counts.sav} question(s)`, !counts.sav)}
-      ${quick("startSpecial", 'data-kind="repeated"', "📌", "Often repeated", `${counts.rep} question(s)`, !counts.rep)}
-    </div>
-    <h2>Full papers</h2><p class="meta">Each paper keeps its own year, shift, timing and marking scheme.</p>
-    ${paperCards || `<div class="card"><h3>No papers yet</h3><p class="meta">Add a data file such as data/2019.js, then list "2019" in data/manifest.js.</p></div>`}
-    <h2>Section-wise practice</h2><p class="meta">Questions on one subject, pooled from every paper.</p>
-    <div class="card-grid">${sectionCards || "<p class='meta'>Sections appear once papers are loaded.</p>"}</div>`;
-  const w = $("data-warning");
-  if (VALIDATION.errors.length) { w.textContent = `${VALIDATION.errors.length} data problem(s) found. Open "Check question data" at the bottom of the page.`; w.classList.remove("hidden"); } else w.classList.add("hidden");
-}
-
-/* ---------- 7. STARTING TESTS ---------- */
-function startPaper(id, mode) {
-  const p = paperById(id), pool = sortPool(ALL_QUESTIONS.filter(q => q.paperId === id));
-  openConfig({ kind: "paper", name: p.name, paperId: id, year: p.year, paper: p, pool, mode, order: "original", shuffle: false, marks: p.marks, sections: [...new Set(pool.map(q => q.section))] });
-}
-function startSection(i, mode) {
-  const s = getSections()[i], pool = ALL_QUESTIONS.filter(q => q.section === s);
-  openConfig({ kind: "section", name: `Topic: ${s}`, pool: sortPool(pool), mode, order: "random", shuffle: false, marks: CONFIG.defaultMarks, sections: [s] });
-}
-function startSpecial(kind, recordPool) {
-  const map = { due: ["Spaced review", dueQuestions], mistakes: ["My mistakes", mistakeQuestions], saved: ["Saved questions", savedQuestions], repeated: ["Often-repeated questions", repeatedPool] };
-  const pool = recordPool || map[kind][1]();
-  if (!pool.length) return toast("Nothing here yet.");
-  openConfig({ kind: "special", name: recordPool ? "Retry: my mistakes" : map[kind][0], pool, mode: "practice", order: "random", shuffle: false, marks: CONFIG.defaultMarks, sections: [...new Set(pool.map(q => q.section))] });
-}
-function startCustom() {
-  const ps = [...document.querySelectorAll(".c-paper:checked")].map(e => e.value), ss = [...document.querySelectorAll(".c-section:checked")].map(e => e.value), ds = [...document.querySelectorAll(".c-diff:checked")].map(e => e.value);
-  if (!ps.length || !ss.length || !ds.length) return toast("Pick at least one paper, section and difficulty.");
-  const pool = sortPool(ALL_QUESTIONS.filter(q => ps.includes(q.paperId) && ss.includes(q.section) && ds.includes(q.difficulty)));
-  if (!pool.length) return toast("No questions match that combination.");
-  const c = $("custom-count").value;
-  openConfig({ kind: "custom", name: "Custom test", pool, mode: "exam", order: "random", shuffle: true, marks: CONFIG.defaultMarks, sections: ss, count: c === "all" ? pool.length : Math.min(+c, pool.length) });
-}
-function renderCustomBuilder() {
-  const chip = (cls, v, label) => `<label class="chip"><input type="checkbox" class="${cls}" value="${esc(v)}" checked> ${esc(label)}</label>`;
-  $("custom-papers").innerHTML = PAPERS.map(p => chip("c-paper", p.id, p.name)).join("") || "<span class='meta'>No papers loaded</span>";
-  $("custom-sections").innerHTML = getSections().map(s => chip("c-section", s, s)).join("");
-  $("custom-difficulty").innerHTML = [...new Set(ALL_QUESTIONS.map(q => q.difficulty))].map(d => chip("c-diff", d, d)).join("");
-}
-
-/* ---------- 8. TEST CONFIG ---------- */
-function openConfig(t) {
-  pendingTest = t; const n = t.count || t.pool.length;
-  $("config-title").textContent = t.name; $("config-meta").textContent = `${t.pool.length} question(s) available`;
-  $("config-mode").value = t.mode; $("config-order").value = t.order; $("config-shuffle").checked = t.shuffle;
-  $("config-count").value = n; $("config-count").max = t.pool.length;
-  $("mark-correct").value = t.marks.correct; $("mark-wrong").value = t.marks.wrong;
-  $("timer-mode").value = t.mode === "exam" ? "perTest" : "none"; syncTimer(true); showView("testconfig");
-}
-function syncTimer(reset) {
-  const t = pendingTest, tm = $("timer-mode").value;
-  $("timer-row").classList.toggle("hidden", tm === "none");
-  $("timer-label").textContent = tm === "perQuestion" ? "Seconds per question" : "Total minutes";
-  if (reset) {
-    const c = Math.min(Math.max(1, num($("config-count").value, t.pool.length)), t.pool.length);
-    $("timer-value").value = tm === "perQuestion" ? 30 : (t.kind === "paper" ? Math.max(1, Math.round(t.paper.durationMin * c / t.pool.length)) : Math.max(1, Math.ceil(c * 0.75)));
-  }
-}
-function launchTest() {
-  const t = pendingTest, mode = $("config-mode").value, order = $("config-order").value, shuf = $("config-shuffle").checked;
-  const count = Math.min(Math.max(1, Math.floor(num($("config-count").value, t.pool.length))), t.pool.length);
-  const tm = $("timer-mode").value, tv = Math.max(1, num($("timer-value").value, 30));
-  const marks = { correct: Math.max(0, num($("mark-correct").value, 1)), wrong: Math.max(0, num($("mark-wrong").value, 0)) };
-  const pool = (order === "random" ? shuffle(t.pool) : [...t.pool]).slice(0, count);
-  const questions = pool.map(q => {
-    const c = { ...q };
-    if (shuf) { const idx = shuffle(q.options.map((_, i) => i)); c.options = idx.map(i => q.options[i]); c.correctAnswer = idx.indexOf(q.correctAnswer); } else c.options = [...q.options];
-    return c;
-  });
-  const perTest = tm === "perTest" ? Math.round(tv * 60) : null, perQ = tm === "perQuestion" ? Math.round(tv) : null;
-  activeQuiz = { meta: { kind: t.kind, name: t.name, paperId: t.paperId || null, year: t.year ?? null, sections: t.sections }, mode, questions, index: 0,
-    answers: {}, marked: {}, visited: {}, times: {}, timerMode: tm, perQ, timeLeft: perTest ?? perQ ?? 0, elapsed: 0, marks, startedAt: Date.now() };
-  startTimerLoop(); renderQuiz(); showView("quiz"); saveProgress();
-}
-
-/* ---------- 9. QUIZ ENGINE ---------- */
-const saveProgress = () => { if (activeQuiz) save(K.prog, activeQuiz); };
-function startTimerLoop() { clearInterval(timerId); timerId = setInterval(tick, 1000); updateTimerDisplay(); }
-function tick() {
-  const a = activeQuiz; if (!a || document.body.dataset.view !== "quiz" || !$("modal").classList.contains("hidden")) return;
-  const q = a.questions[a.index]; a.times[q.id] = (a.times[q.id] || 0) + 1; a.elapsed++;
-  if (a.timerMode !== "none") {
-    a.timeLeft--;
-    if (a.timeLeft <= 0) {
-      if (a.timerMode === "perQuestion" && a.index < a.questions.length - 1) { toast("Time's up for this question."); goToQuestion(a.index + 1); }
-      else { toast("Time's up. Submitting your test."); finishTest(); return; }
-    }
-  }
-  updateTimerDisplay(); if (a.elapsed % 5 === 0) saveProgress();
-}
-function updateTimerDisplay() {
-  const a = activeQuiz, el = $("quiz-timer"); if (!a) return;
-  el.textContent = `⏱ ${clock(a.timerMode === "none" ? a.elapsed : Math.max(0, a.timeLeft))}`;
-  el.classList.toggle("timer-low", a.timerMode !== "none" && a.timeLeft <= 10);
-}
-function renderQuiz() {
-  const a = activeQuiz, q = a.questions[a.index], n = a.questions.length; a.visited[q.id] = true;
-  $("quiz-progress-label").textContent = `Question ${a.index + 1} of ${n}`;
-  $("quiz-progress-fill").style.width = `${(a.index + 1) / n * 100}%`;
-  $("quiz-meta").innerHTML = `<span>${esc(q.section)}</span><span>${esc(q.paperName)} Q${q.originalNumber}</span><span>${esc(q.difficulty)}</span>${repeatChip(q)}${q.verified ? "" : '<span class="chip bad">Answer key unverified</span>'}`;
-  $("quiz-question").innerHTML = rich(q.question);
-  const chosen = a.answers[q.id], locked = a.mode === "practice" && chosen !== undefined;
-  $("quiz-options").innerHTML = q.options.map((o, i) => {
-    let cls = "option"; if (locked) { cls += " locked"; if (i === q.correctAnswer) cls += " right"; else if (i === chosen) cls += " wrong"; } else if (chosen === i) cls += " selected";
-    return `<button class="${cls}" data-act="pick" data-i="${i}"><span class="opt-key">${KEYL[i]}</span><span>${rich(o)}</span></button>`;
-  }).join("");
-  $("quiz-feedback").innerHTML = locked ? `<div class="feedback ${chosen === q.correctAnswer ? "" : "bad"}"><strong>${chosen === q.correctAnswer ? "Correct" : `Incorrect. The answer is ${KEYL[q.correctAnswer]}.`}</strong>${q.explanation ? `<p>${rich(q.explanation)}</p>` : ""}</div>` : "";
-  const note = load(K.notes, {})[q.id] || ""; $("note-box").value = note; $("note-wrap").open = !!note;
-  $("mark-btn").textContent = a.marked[q.id] ? "Unmark" : "Mark";
-  $("bm-btn").textContent = load(K.bm, {})[q.id] ? "★ Saved" : "☆ Save";
-  $("clear-btn").classList.toggle("hidden", a.mode === "practice");
-  $("prev-btn").disabled = a.index === 0;
-  $("next-btn").textContent = a.index === n - 1 ? "Finish" : "Next";
-  $("quiz-nav").innerHTML = a.questions.map((x, i) => {
-    const ans = a.answers[x.id] !== undefined, mk = a.marked[x.id];
-    let c = ans && mk ? "both" : mk ? "marked" : ans ? "answered" : a.visited[x.id] ? "notans" : "unvisited";
-    if (i === a.index) c += " current"; return `<button class="nav-cell ${c}" data-act="goto" data-i="${i}">${i + 1}</button>`;
-  }).join("");
-  updateTimerDisplay();
-}
-function pick(i) {
-  const a = activeQuiz, q = a.questions[a.index]; if (a.mode === "practice" && a.answers[q.id] !== undefined) return;
-  a.answers[q.id] = i; renderQuiz(); saveProgress();
-}
-function goToQuestion(i) {
-  const a = activeQuiz; if (i < 0) return; if (i >= a.questions.length) return requestSubmit();
-  a.index = i; if (a.timerMode === "perQuestion") a.timeLeft = a.perQ; renderQuiz(); saveProgress(); window.scrollTo(0, 0);
-}
-function requestSubmit() {
-  const a = activeQuiz, n = a.questions.length, ans = Object.keys(a.answers).length, mk = Object.values(a.marked).filter(Boolean).length;
-  confirmModal("Submit this test?", `<p>Answered: <b>${ans}</b> of ${n}<br>Not answered: <b>${n - ans}</b><br>Marked for review: <b>${mk}</b></p>`, "Submit").then(ok => { if (ok) finishTest(); });
-}
-
-/* ---------- 10. RESULTS ---------- */
-function finishTest() {
-  const a = activeQuiz; if (!a) return; clearInterval(timerId);
-  const before = new Set(badgeDefs().filter(b => b.ok).map(b => b.id));
-  const qs = a.questions, m = a.marks; let correct = 0, attempted = 0; const sectionBreakdown = {}, paperBreakdown = {};
-  qs.forEach(q => {
-    const ans = a.answers[q.id], isA = ans !== undefined, isC = isA && ans === q.correctAnswer, t = a.times[q.id] || 0;
-    if (isA) attempted++; if (isC) correct++;
-    [[sectionBreakdown, q.section], [paperBreakdown, q.paperName]].forEach(([o, k]) => {
-      o[k] = o[k] || { total: 0, attempted: 0, correct: 0, timeSec: 0 }; o[k].total++; o[k].timeSec += t; if (isA) o[k].attempted++; if (isC) o[k].correct++;
-    });
-  });
-  const incorrect = attempted - correct, score = +(correct * m.correct - incorrect * m.wrong).toFixed(2), maxScore = +(qs.length * m.correct).toFixed(2);
-  const rec = { id: Date.now(), date: new Date().toISOString(), testName: a.meta.name, type: a.meta.kind, mode: a.mode, paperId: a.meta.paperId, year: a.meta.year, sections: a.meta.sections,
-    questionIds: qs.map(q => q.id), answers: a.answers, marked: a.marked, times: a.times, optionOrder: qs.map(q => ({ id: q.id, options: q.options, correctAnswer: q.correctAnswer })),
-    totalQuestions: qs.length, attempted, correct, incorrect, unanswered: qs.length - attempted, marks: m, score, maxScore,
-    scorePercent: maxScore ? Math.max(0, Math.round(score / maxScore * 100)) : 0, timeTakenSec: a.elapsed, avgTimeSec: Math.round(a.elapsed / qs.length), sectionBreakdown, paperBreakdown };
-  const h = getHistory(); h.unshift(rec); save(K.hist, h);
-  addDay(attempted); updateSRS(qs, a.answers); localStorage.removeItem(K.prog); activeQuiz = null;
-  currentRecord = rec; renderResults(rec); showView("results");
-  badgeDefs().filter(b => b.ok && !before.has(b.id)).forEach(b => toast(`New badge: ${b.name}`));
-}
-const rowLabel = (acc, att) => att < CONFIG.minAttemptsForLabel ? '<span class="tag">Need more data</span>' : acc >= CONFIG.strongFrom ? '<span class="tag good">Strong</span>' : acc < CONFIG.weakBelow ? '<span class="tag bad">Weak</span>' : '<span class="tag">Average</span>';
-function breakdownTable(obj, first) {
-  return `<tr><th>${first}</th><th>Total</th><th>Attempted</th><th>Correct</th><th>Accuracy</th><th>Avg time</th></tr>` + Object.entries(obj).map(([k, b]) =>
-    `<tr><td>${esc(k)}</td><td>${b.total}</td><td>${b.attempted}</td><td>${b.correct}</td><td>${pct(b.correct, b.attempted)}%</td><td>${b.timeSec !== undefined ? Math.round(b.timeSec / b.total) + "s" : "–"}</td></tr>`).join("");
-}
-function statusOf(r, id) { const o = r.optionOrder.find(x => x.id === id), a = r.answers[id]; return a === undefined ? "unanswered" : a === o.correctAnswer ? "correct" : "incorrect"; }
-function renderResults(r) {
-  currentRecord = r;
-  $("results-title").textContent = r.testName;
-  $("results-sub").textContent = `${new Date(r.date).toLocaleString()} · ${(r.mode || "exam") === "exam" ? "Exam mode" : "Practice mode"}`;
-  const mk = r.marks || CONFIG.defaultMarks, sc = r.score ?? r.correct, mx = r.maxScore ?? r.totalQuestions;
-  const st = (n, l) => `<div class="stat"><span class="stat-num">${n}</span><span class="stat-label">${l}</span></div>`;
-  $("results-overall").innerHTML = st(`${sc} / ${mx}`, `Marks (+${mk.correct} / −${mk.wrong})`) + st(r.scorePercent + "%", "Score") + st(`${r.correct}/${r.totalQuestions}`, "Correct") + st(r.incorrect, "Incorrect") + st(r.unanswered, "Unanswered") + st(fmt(r.timeTakenSec), "Time taken") + st(r.avgTimeSec + "s", "Avg per question");
-  const secs = Object.entries(r.sectionBreakdown || {}).filter(([, b]) => b.attempted > 0);
-  const slow = Object.entries(r.sectionBreakdown || {}).filter(([, b]) => b.timeSec).sort((x, y) => y[1].timeSec / y[1].total - x[1].timeSec / x[1].total)[0];
-  const weak = secs.filter(([, b]) => b.attempted >= 3).sort((x, y) => x[1].correct / x[1].attempted - y[1].correct / y[1].attempted)[0];
-  $("results-insight").textContent = [weak ? `Weakest section: ${weak[0]} (${pct(weak[1].correct, weak[1].attempted)}% accuracy).` : "", slow ? `Slowest section: ${slow[0]} (${Math.round(slow[1].timeSec / slow[1].total)}s per question).` : ""].filter(Boolean).join(" ");
-  const sk = Object.keys(r.sectionBreakdown || {}); $("results-section-wrap").classList.toggle("hidden", sk.length <= 1);
-  if (sk.length > 1) $("results-section-table").innerHTML = breakdownTable(r.sectionBreakdown, "Section");
-  const pb = r.paperBreakdown || r.yearBreakdown || {}; $("results-paper-wrap").classList.toggle("hidden", Object.keys(pb).length <= 1);
-  if (Object.keys(pb).length > 1) $("results-paper-table").innerHTML = breakdownTable(pb, "Paper");
-  const ts = r.questionIds.map(id => r.times?.[id] || 0), mxT = Math.max(1, ...ts);
-  $("results-heat").innerHTML = r.questionIds.map((id, i) => `<div class="heat s-${statusOf(r, id)}" style="--t:${(ts[i] / mxT).toFixed(2)}" title="Q${i + 1}: ${ts[i]}s, ${statusOf(r, id)}">${i + 1}</div>`).join("");
-}
-
-/* ---------- 11. REVIEW + SAVED ---------- */
-function reviewItem(q, opts, correct, userAns, status) {
-  const note = load(K.notes, {})[q.id], bm = !!load(K.bm, {})[q.id];
-  return `<article class="review-item ${status}"><div class="chips-meta"><span>${esc(q.section)}</span><span>${esc(q.paperName)} Q${q.originalNumber}</span>${repeatChip(q)}${q.verified ? "" : '<span class="chip bad">Answer key unverified</span>'}</div>
-    <p class="review-q">${rich(q.question)}</p>
-    ${opts.map((o, i) => `<div class="review-opt ${i === correct ? "correct" : i === userAns ? "incorrect" : ""}"><b>${KEYL[i]}</b> ${rich(o)}${i === userAns ? " <em>(your answer)</em>" : ""}</div>`).join("")}
-    ${status === "neutral" ? "" : `<p class="review-status">${status === "unanswered" ? "Not answered" : status === "correct" ? "Correct" : "Incorrect"}</p>`}
-    ${q.explanation ? `<p class="review-explain"><strong>Explanation:</strong> ${rich(q.explanation)}</p>` : ""}
-    ${note ? `<p class="review-note">Note: ${rich(note)}</p>` : ""}
-    <button class="btn small no-print" data-act="bmToggle" data-id="${esc(q.id)}">${bm ? "★ Saved" : "☆ Save"}</button></article>`;
-}
-function openReview(r) {
-  r = r || currentRecord; currentRecord = r;
-  const items = r.questionIds.map(id => ({ id, q: QMAP.get(id), o: r.optionOrder.find(x => x.id === id) })).filter(x => x.q && x.o).map(x => ({ ...x, st: statusOf(r, x.id), mk: !!r.marked?.[x.id] }));
-  const F = { all: ["All", () => true], incorrect: ["Wrong", x => x.st === "incorrect"], unanswered: ["Unanswered", x => x.st === "unanswered"], correct: ["Correct", x => x.st === "correct"], marked: ["Marked", x => x.mk] };
-  $("review-title").textContent = `Review: ${r.testName}`;
-  $("review-filters").innerHTML = Object.entries(F).map(([k, [l, f]]) => `<button class="chip ${reviewF === k ? "on" : ""}" data-act="reviewFilter" data-f="${k}">${l} (${items.filter(f).length})</button>`).join("");
-  $("review-list").innerHTML = items.filter(F[reviewF][1]).map(x => reviewItem(x.q, x.o.options, x.o.correctAnswer, r.answers[x.id], x.st)).join("") || "<p class='meta'>No questions in this filter.</p>";
-  showView("review");
-}
-function renderSaved() {
-  const qs = savedQuestions();
-  $("saved-body").innerHTML = `<h2>Saved questions</h2><p class="meta">Bookmarked questions with answers and your notes, ready for revision.</p>
-    ${qs.length ? `<div class="quiz-actions"><button class="btn primary" data-act="startSpecial" data-kind="saved">Practice saved questions</button></div>` : ""}
-    ${qs.map(q => reviewItem(q, q.options, q.correctAnswer, undefined, "neutral")).join("") || "<div class='card'><h3>Nothing saved yet</h3><p class='meta'>Tap Save on any question while practising or reviewing.</p></div>"}`;
-}
-
-/* ---------- 12. HISTORY, STATS, DATA CHECK ---------- */
-function renderHistory() {
-  const h = getHistory();
-  $("history-list").innerHTML = h.length ? h.map(r => `<div class="card"><h3>${esc(r.testName)}</h3><p class="meta">${new Date(r.date).toLocaleString()}</p>
-    <p class="meta">${r.scorePercent}% · ${r.correct}/${r.totalQuestions} correct · ${fmt(r.timeTakenSec)}</p>
-    <div class="card-actions"><button class="btn" data-act="openHistory" data-id="${r.id}">Details</button><button class="btn" data-act="reviewHistory" data-id="${r.id}">Review</button></div></div>`).join("") : "<div class='card'><h3>No attempts yet</h3><p class='meta'>Finish a test and it will appear here.</p></div>";
-}
-function trendSvg(v) {
-  if (v.length < 2) return "<p class='meta'>Finish at least two tests to see your trend.</p>";
-  const W = 600, H = 180, p = 28, pts = v.map((x, i) => [p + i * (W - 2 * p) / (v.length - 1), H - p - x / 100 * (H - 2 * p)]);
-  return `<svg class="trend" viewBox="0 0 ${W} ${H}" role="img" aria-label="Score trend">${[0, 50, 100].map(g => { const y = H - p - g / 100 * (H - 2 * p); return `<line x1="${p}" x2="${W - p}" y1="${y}" y2="${y}" stroke="var(--line)"/><text x="2" y="${y + 4}" font-size="11" fill="var(--ink-soft)">${g}%</text>`; }).join("")}
-    <polyline fill="none" stroke="var(--brand)" stroke-width="2.5" points="${pts.map(q => q.join(",")).join(" ")}"/>${pts.map((q, i) => `<circle cx="${q[0]}" cy="${q[1]}" r="4" fill="var(--accent)"><title>${v[i]}%</title></circle>`).join("")}</svg>`;
-}
-function renderStats() {
-  const h = getHistory(), ss = sectionStats(), tot = Object.values(ss).reduce((s, b) => ({ a: s.a + b.attempted, c: s.c + b.correct, t: s.t + b.timeSec }), { a: 0, c: 0, t: 0 });
-  const trend = [...h].reverse().slice(-20).map(r => r.scorePercent), st = streaks(load(K.days, {}));
-  const freq = [...detectRepeatsMap().values()].filter(g => g.length > 1).sort((a, b) => b.length - a.length).slice(0, 8);
-  const k = (n, l) => `<div class="stat"><span class="stat-num">${n}</span><span class="stat-label">${l}</span></div>`;
-  $("stats-body").innerHTML = `<h2>Your progress</h2>
-    <div class="stat-grid">${k(h.length, "Tests finished")}${k(tot.a, "Questions answered")}${k(pct(tot.c, tot.a) + "%", "Overall accuracy")}${k(tot.a && tot.t ? Math.round(tot.t / tot.a) + "s" : "–", "Avg time per answer")}${k(st.current, "Day streak")}${k(st.best, "Best streak")}</div>
-    <h3>Score trend (last 20 tests)</h3>${trendSvg(trend)}
-    <h3>Section strengths</h3><div class="table-scroll"><table class="data-table"><tr><th>Section</th><th>Attempted</th><th>Accuracy</th><th>Avg time</th><th>Level</th></tr>
-    ${getSections().map(s => { const b = ss[s]; if (!b) return `<tr><td>${esc(s)}</td><td>0</td><td>–</td><td>–</td><td><span class="tag">Need more data</span></td></tr>`; const acc = pct(b.correct, b.attempted); return `<tr><td>${esc(s)}</td><td>${b.attempted}</td><td>${acc}%</td><td>${b.timeSec ? Math.round(b.timeSec / Math.max(1, b.attempted)) + "s" : "–"}</td><td>${rowLabel(acc, b.attempted)}</td></tr>`; }).join("")}</table></div>
-    <h3>Most repeated questions</h3>${freq.length ? freq.map(g => `<div class="freq"><b>${rich(g[0].question)}</b><br><span class="meta">Seen in ${g.length} papers: ${esc(g.map(q => q.paperName + " Q" + q.originalNumber).join(", "))}</span></div>`).join("") + `<div class="quiz-actions"><button class="btn" data-act="startSpecial" data-kind="repeated">Practice repeated questions</button></div>` : "<p class='meta'>No repeats found across the loaded papers yet.</p>"}`;
-}
-const detectRepeatsMap = () => { const by = new Map(); ALL_QUESTIONS.forEach(q => { const k = normalize(q.question); if (!by.has(k)) by.set(k, []); by.get(k).push(q); }); return by; };
-function renderDataCheck() {
-  const secs = getSections(), v = VALIDATION;
-  $("datacheck-body").innerHTML = `<h2>Question data check</h2>
-    <p class="meta">${ALL_QUESTIONS.length} questions in ${PAPERS.length} paper(s), ${secs.length} section(s).</p>
-    <div class="stat-grid"><div class="stat"><span class="stat-num">${v.errors.length}</span><span class="stat-label">Errors</span></div><div class="stat"><span class="stat-num">${v.warns.length}</span><span class="stat-label">Warnings</span></div></div>
-    ${v.errors.length ? `<h3>Errors</h3>${v.errors.map(e => `<p class="meta">• ${esc(e)}</p>`).join("")}` : "<p class='insight'>No errors found.</p>"}
-    ${v.warns.length ? `<h3>Warnings</h3>${v.warns.slice(0, 80).map(e => `<p class="meta">• ${esc(e)}</p>`).join("")}${v.warns.length > 80 ? `<p class="meta">…and ${v.warns.length - 80} more</p>` : ""}` : ""}
-    <h3>Questions per section and paper</h3><div class="table-scroll"><table class="data-table"><tr><th>Section</th>${PAPERS.map(p => `<th>${esc(p.name)}</th>`).join("")}<th>Total</th></tr>
-    ${secs.map(s => `<tr><td>${esc(s)}</td>${PAPERS.map(p => `<td>${ALL_QUESTIONS.filter(q => q.section === s && q.paperId === p.id).length}</td>`).join("")}<td>${ALL_QUESTIONS.filter(q => q.section === s).length}</td></tr>`).join("")}
-    <tr><th>Total</th>${PAPERS.map(p => `<th>${p.count}</th>`).join("")}<th>${ALL_QUESTIONS.length}</th></tr></table></div>`;
-}
-
-/* ---------- 13. BACKUP ---------- */
-function exportData() {
-  const data = {}; [K.hist, K.prefs, K.bm, K.notes, K.srs, K.days].forEach(k => data[k] = load(k, null));
-  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify({ app: "wbpsc-clerkship-pyq", version: 2, exportedAt: new Date().toISOString(), data }, null, 2)], { type: "application/json" }));
-  a.download = `clerkship-pyq-backup-${today()}.json`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-}
-function importData(file) {
-  const rd = new FileReader();
-  rd.onload = async () => {
-    try {
-      const j = JSON.parse(rd.result); if (j.app !== "wbpsc-clerkship-pyq" || !j.data) throw new Error("bad");
-      if (!(await confirmModal("Replace your progress?", "<p>This replaces the history, notes, saved questions and settings on this device with the backup.</p>", "Import"))) return;
-      Object.entries(j.data).forEach(([k, v]) => { if (Object.values(K).includes(k) && v !== null) save(k, v); });
-      applyPrefs(); toast("Backup imported."); goView("history");
-    } catch (e) { toast("That file is not a valid backup."); }
-  };
-  rd.readAsText(file);
-}
-
-/* ---------- 14. EVENTS ---------- */
-function refreshCurrent() {
-  const v = document.body.dataset.view;
-  if (v === "review") openReview(currentRecord); else if (v === "saved") renderSaved(); else if (v === "quiz" && activeQuiz) renderQuiz();
-}
-const ACTIONS = {
-  home: () => leaveQuiz(() => goView("dashboard")),
-  nav: d => leaveQuiz(() => goView(d.view)),
-  theme: () => setPref("theme", document.body.classList.contains("dark") ? "light" : "dark"),
-  fontUp: () => setPref("font", Math.min(1.3, +(prefs.font + 0.1).toFixed(1))),
-  fontDown: () => setPref("font", Math.max(0.9, +(prefs.font - 0.1).toFixed(1))),
-  focus: () => document.body.classList.toggle("focus"),
-  startPaper: d => startPaper(d.id, d.mode),
-  startSection: d => startSection(+d.i, d.mode),
-  startSpecial: d => startSpecial(d.kind),
-  startCustom, launch: launchTest,
-  chipsAll: d => document.querySelectorAll(`#${d.target} input`).forEach(i => i.checked = d.v === "1"),
-  resume: () => { const p = load(K.prog, null); if (!p) return; activeQuiz = p; startTimerLoop(); renderQuiz(); showView("quiz"); },
-  pick: d => pick(+d.i), goto: d => goToQuestion(+d.i),
-  prev: () => goToQuestion(activeQuiz.index - 1), next: () => goToQuestion(activeQuiz.index + 1),
-  clear: () => { delete activeQuiz.answers[activeQuiz.questions[activeQuiz.index].id]; renderQuiz(); saveProgress(); },
-  mark: () => { const id = activeQuiz.questions[activeQuiz.index].id; activeQuiz.marked[id] = !activeQuiz.marked[id]; renderQuiz(); saveProgress(); },
-  bm: () => ACTIONS.bmToggle({ id: activeQuiz.questions[activeQuiz.index].id }),
-  bmToggle: d => { const b = load(K.bm, {}); if (b[d.id]) delete b[d.id]; else b[d.id] = true; save(K.bm, b); refreshCurrent(); },
-  submit: requestSubmit,
-  review: () => { reviewF = "all"; openReview(); },
-  reviewFilter: d => { reviewF = d.f; openReview(); },
-  retryWrong: () => { const r = currentRecord; const pool = r.questionIds.filter(id => statusOf(r, id) !== "correct").map(id => QMAP.get(id)).filter(Boolean); startSpecial("mistakes", pool); },
-  print: () => window.print(),
-  share: () => { const r = currentRecord, text = `${r.testName}: ${r.score ?? r.correct}/${r.maxScore ?? r.totalQuestions} (${r.scorePercent}%), ${r.correct} correct, ${r.incorrect} wrong, ${fmt(r.timeTakenSec)}. WBPSC Clerkship PYQs`;
-    if (navigator.share) navigator.share({ text }).catch(() => {}); else navigator.clipboard?.writeText(text).then(() => toast("Result copied to clipboard")); },
-  openHistory: d => { const r = getHistory().find(x => String(x.id) === d.id); if (r) { renderResults(r); showView("results"); } },
-  reviewHistory: d => { const r = getHistory().find(x => String(x.id) === d.id); if (r) { reviewF = "all"; openReview(r); } },
-  exportData, importData: () => $("import-file").click(),
-  clearHistory: async () => { if (await confirmModal("Clear all progress?", "<p>This deletes attempts, notes, saved questions, streaks and review schedules on this device. Export a backup first if unsure.</p>", "Delete everything")) { [K.hist, K.notes, K.bm, K.srs, K.days, K.prog].forEach(k => localStorage.removeItem(k)); toast("Progress cleared."); goView("history"); } }
-};
-document.addEventListener("click", e => { const b = e.target.closest("[data-act]"); if (b && ACTIONS[b.dataset.act]) ACTIONS[b.dataset.act](b.dataset, b); });
-document.addEventListener("change", e => {
-  if (e.target.id === "import-file" && e.target.files[0]) { importData(e.target.files[0]); e.target.value = ""; }
-  else if (e.target.id === "config-mode") { $("timer-mode").value = e.target.value === "exam" ? "perTest" : "none"; syncTimer(true); }
-  else if (e.target.id === "timer-mode") syncTimer(true);
-  else if (e.target.id === "config-count" && $("timer-mode").value === "perTest") syncTimer(true);
-});
-let noteT; $("note-box").addEventListener("input", e => { clearTimeout(noteT); noteT = setTimeout(() => { if (!activeQuiz) return; const n = load(K.notes, {}), id = activeQuiz.questions[activeQuiz.index].id; if (e.target.value.trim()) n[id] = e.target.value; else delete n[id]; save(K.notes, n); }, 400); });
-document.addEventListener("keydown", e => {
-  if (!activeQuiz || document.body.dataset.view !== "quiz" || /TEXTAREA|INPUT|SELECT/.test(e.target.tagName) || e.ctrlKey || e.metaKey || e.altKey || !$("modal").classList.contains("hidden")) return;
-  const k = e.key.toLowerCase();
-  if (/^[1-4]$/.test(k)) pick(+k - 1); else if (k === "n" || k === "arrowright") goToQuestion(activeQuiz.index + 1);
-  else if (k === "p" || k === "arrowleft") goToQuestion(activeQuiz.index - 1); else if (k === "m") ACTIONS.mark(); else if (k === "b") ACTIONS.bm(); else if (k === "escape") document.body.classList.remove("focus");
-});
-let sx = 0, sy = 0;
-$("view-quiz").addEventListener("touchstart", e => { sx = e.touches[0].clientX; sy = e.touches[0].clientY; }, { passive: true });
-$("view-quiz").addEventListener("touchend", e => {
-  if (!activeQuiz || /TEXTAREA/.test(e.target.tagName)) return;
-  const dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy;
-  if (Math.abs(dx) > 70 && Math.abs(dy) < 40) { if (dx < 0 && activeQuiz.index < activeQuiz.questions.length - 1) goToQuestion(activeQuiz.index + 1); else if (dx > 0) goToQuestion(activeQuiz.index - 1); }
-}, { passive: true });
-window.addEventListener("pagehide", saveProgress);
-
-/* ---------- 15. INIT ---------- */
-function initApp() {
-  migrate(); applyPrefs(); showView("loading");
-  loadDataFiles(typeof PYQ_YEARS !== "undefined" ? PYQ_YEARS : [], () => {
-    PAPERS.sort((a, b) => String(a.year).localeCompare(String(b.year), undefined, { numeric: true }) || a.shift.localeCompare(b.shift));
-    ALL_QUESTIONS.forEach(q => QMAP.set(q.id, q)); detectRepeats(); VALIDATION = validateDataset();
-    renderDashboard(); renderCustomBuilder(); showView("dashboard");
-  });
-}
-document.addEventListener("DOMContentLoaded", initApp);
+/* ---------- events ---------- */
+const act={
+ tab:v=>{if(run)return;tab=v;view()},theme:()=>{const r=document.documentElement,t=r.dataset.t==='dark'?'light':'dark';r.dataset.t=t;sv('t',t);$('meta[name=theme-color]').content=t==='dark'?'#070a1a':'#f3f1fb'},
+ test:v=>start('test',v),quiz:v=>start('quiz',v),drill:()=>start('drill'),
+ pick:v=>{const r=run,i=+v;if(r.kind==='test')r.ans[r.cur]=r.ans[r.cur]===i?null:i;else if(r.ans[r.cur]===null)r.ans[r.cur]=i;qv()},
+ go:v=>{run.cur=+v;qv()},next:()=>{run.cur++;qv()},prev:()=>{if(run.cur>0){run.cur--;qv()}},clr:()=>{if(run.kind==='test'){run.ans[run.cur]=null;qv()}},
+ sub:()=>{const n=run.ans.filter(x=>x===null).length;if(!n||confirm(n+' unanswered. Submit now?'))submit()},
+ exit:()=>{if(confirm('Leave without saving this attempt?')){clearInterval(run.h);run=null;view()}},
+ savenote:v=>{const q=last.qs[+v];D.notes.push({id:Date.now(),t:q.s,d:dk(),pin:0,x:q.q+'\nAnswer: '+q.o[q.a]+(q.e?'\n'+q.e:'')});save('notes');toast('Saved to notes')},
+ addnote:()=>{const x=$('#nx').value.trim();if(!x)return toast('Write something first');D.notes.push({id:Date.now(),t:$('#nt').value,d:dk(),pin:0,x});save('notes');notes()},
+ pin:v=>{const n=D.notes.find(x=>x.id==v);n.pin=n.pin?0:1;save('notes');$('#nl').innerHTML=noteList()},
+ del:v=>{D.notes=D.notes.filter(x=>x.id!=v);save('notes');$('#nl').innerHTML=noteList()},
+ saveplan:()=>{D.plan={name:$('#pn').value.trim(),date:$('#pd').value};save('plan');toast('Plan saved');plan()},
+ pdf,pad,pclose:()=>{$('#pad').className='pad'},pen:()=>{P.er=0;pad()},era:()=>{P.er=1;pad()},und:()=>{P.st.pop();redraw()},pclr:()=>{P.st=[];redraw()},calc:()=>$('#cl').classList.toggle('show'),ck:calc};
+document.addEventListener('click',e=>{const b=e.target.closest('[data-a]');if(b&&act[b.dataset.a])act[b.dataset.a](b.dataset.v)});
+document.addEventListener('input',e=>{if(e.target.id==='ns'){nq=e.target.value;$('#nl').innerHTML=noteList()}});
+view();
+})();

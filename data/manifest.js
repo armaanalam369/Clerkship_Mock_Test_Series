@@ -40,11 +40,11 @@ window.RULES = {
     { n: 'Biology',                    i: '🧬',  k: 'BIO'  },
     { n: 'Modern History',             i: '📜',  k: 'MOD'  },
     { n: 'Arts & Culture',             i: '🎭',  k: 'ART'  },
-    { n: 'Indian Geography',           i: '🗺️', k: 'IGE'  },
+    { n: 'Indian Geography',           i: '🗺️', k: 'IGEO'  },
     { n: 'West Bengal Specific',       i: '🐅',  k: 'WB'   },
     { n: 'Environmental Studies',      i: '🌱',  k: 'ENV'  },
     { n: 'Static GK',                  i: '📌',  k: 'GK'   },
-    { n: 'General Mental Ability',     i: '🧠',  k: 'GMA'  },
+    { n: 'Mathematics',     i: '🧠',  k: 'MATHS'  },
     { n: 'Current Affairs',            i: '📰',  k: 'CA'   }
   ]
 };

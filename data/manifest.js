@@ -37,7 +37,7 @@ window.RULES = {
     { n: 'Indian National Movement',   i: '🇮🇳', k: 'INM'  },
     { n: 'Chemistry',                  i: '🧪',  k: 'CHE'  },
     { n: 'World & Physical Geography', i: '🌍',  k: 'WPG'  },
-    { n: 'Biology',                    i: '🧬',  k: 'BIO'  },
+    { n: 'General Science',                    i: '🧬',  k: 'SCI'  },
     { n: 'Modern History',             i: '📜',  k: 'MOD'  },
     { n: 'Arts & Culture',             i: '🎭',  k: 'ART'  },
     { n: 'Indian Geography',           i: '🗺️', k: 'IGEO'  },
@@ -45,7 +45,7 @@ window.RULES = {
     { n: 'Environmental Studies',      i: '🌱',  k: 'ENV'  },
     { n: 'Static GK',                  i: '📌',  k: 'GK'   },
     { n: 'Mathematics',     i: '🧠',  k: 'MATHS'  },
-    { n: 'Current Affairs',            i: '📰',  k: 'CA'   }
+    { n: 'GK & Current Affairs',            i: '📰',  k: 'GK & CA'   }
   ]
 };
 

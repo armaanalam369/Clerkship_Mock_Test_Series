@@ -28,22 +28,18 @@ window.RULES = {
 
   /* `n` must match the "s" field of every question EXACTLY. i = icon, k = short radar code */
   topics: [
-    { n: 'English',                    i: '🔤',  k: 'ENG'  },
-    { n: 'Indian Polity',              i: '🏛️', k: 'POL'  },
-    { n: 'Ancient History',            i: '🏺',  k: 'ANC'  },
-    { n: 'Indian Economy',             i: '💹',  k: 'ECO'  },
-    { n: 'Medieval History',           i: '🏰',  k: 'MED'  },
-    { n: 'Physics',                    i: '⚛️', k: 'PHY'  },
-    { n: 'Indian National Movement',   i: '🇮🇳', k: 'INM'  },
-    { n: 'Chemistry',                  i: '🧪',  k: 'CHE'  },
+    { n: 'English',                    i: '🔤',  k: 'ENGLISH'  },
+    { n: 'Indian Polity',              i: '🏛️', k: 'POLITY'  },
+    { n: 'Ancient History',            i: '🏺',  k: 'ANCIENT HIST'  },
+    { n: 'Indian Economy',             i: '💹',  k: 'ECONOMY'  },
+    { n: 'Medieval History',           i: '🏰',  k: 'MEDIEVAL HIST'  },
     { n: 'Physical Geography', i: '🌍',  k: 'PGEO'  },
-    { n: 'General Science',                    i: '🧬',  k: 'SCI'  },
-    { n: 'Modern History',             i: '📜',  k: 'MOD'  },
+    { n: 'General Science',                    i: '🧬',  k: 'SCIENCE'  },
+    { n: 'Modern History',             i: '📜',  k: 'MODERN HIST'  },
     { n: 'Arts & Culture',             i: '🎭',  k: 'ART'  },
     { n: 'Indian Geography',           i: '🗺️', k: 'IGEO'  },
-    { n: 'West Bengal Specific',       i: '🐅',  k: 'WB'   },
+    { n: 'West Bengal Specific',       i: '🐅',  k: 'WB SPECIFIC'   },
     { n: 'Environmental Studies',      i: '🌱',  k: 'ENV'  },
-    { n: 'Static GK',                  i: '📌',  k: 'GK'   },
     { n: 'Mathematics',     i: '🧠',  k: 'MATHS'  },
     { n: 'GK & Current Affairs',            i: '📰',  k: 'GK & CA'   }
   ]
@@ -70,7 +66,27 @@ window.SET_LIST = [
   { id: 'set-17', title: 'Set 17', file: 'data/set-17.js' },
   { id: 'set-18', title: 'Set 18', file: 'data/set-18.js' },
   { id: 'set-19', title: 'Set 19', file: 'data/set-19.js' },
-  { id: 'set-20', title: 'Set 20', file: 'data/set-20.js' }
+  { id: 'set-20', title: 'Set 20', file: 'data/set-20.js' },
+  { id: 'set-21', title: 'Set 21', file: 'data/set-21.js' },
+  { id: 'set-22', title: 'Set 22', file: 'data/set-22.js' },
+  { id: 'set-23', title: 'Set 23', file: 'data/set-23.js' },
+  { id: 'set-24', title: 'Set 24', file: 'data/set-24.js' },
+  { id: 'set-25', title: 'Set 25', file: 'data/set-25.js' },
+  { id: 'set-26', title: 'Set 26', file: 'data/set-26.js' },
+  { id: 'set-27', title: 'Set 27', file: 'data/set-27.js' },
+  { id: 'set-28', title: 'Set 28', file: 'data/set-28.js' },
+  { id: 'set-29', title: 'Set 29', file: 'data/set-29.js' },
+  { id: 'set-30', title: 'Set 30', file: 'data/set-30.js' },
+  { id: 'set-31', title: 'Set 31', file: 'data/set-31.js' },
+  { id: 'set-32', title: 'Set 32', file: 'data/set-32.js' },
+  { id: 'set-33', title: 'Set 33', file: 'data/set-33.js' },
+  { id: 'set-34', title: 'Set 34', file: 'data/set-34.js' },
+  { id: 'set-35', title: 'Set 35', file: 'data/set-35.js' },
+  { id: 'set-36', title: 'Set 36', file: 'data/set-36.js' },
+  { id: 'set-37', title: 'Set 37', file: 'data/set-37.js' },
+  { id: 'set-38', title: 'Set 38', file: 'data/set-38.js' },
+  { id: 'set-39', title: 'Set 39', file: 'data/set-39.js' },
+  { id: 'set-40', title: 'Set 40', file: 'data/set-40.js' }
 ];
 
 /* ---- Motivational quotes (one per day). Add your own! ---- */

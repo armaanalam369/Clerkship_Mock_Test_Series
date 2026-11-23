@@ -1,5 +1,9 @@
 /* WBPSC Clerkship Prelims — Mock Test Set 01 (100 Questions) */
-(window.PAPERS=window.PAPERS||{})['set-1']={questions:[
+(window.SETS = window.SETS || {})['set-1'] = {
+  id: 'set-1',
+  title: 'Set 1',
+  minutes: 90,
+  questions:[
 {s:'English',c:'Preposition',q:'The book is _____ the table.',o:['on','at','over','into'],a:0,e:'"On" indicates physical contact with the top surface of the table.'},
 {s:'English',c:'One-word Substitution',q:'One word substitution for: A person who loves books',o:['Bibliophile','Misanthrope','Philatelist','Philanthropist'],a:0,e:'A bibliophile is a person who collects or has a great love of books.'},
 {s:'English',c:'Preposition',q:'India won independence _____ 1947.',o:['by','in','on','at'],a:1,e:'"In" is used before years, months, and centuries.'},

@@ -1,5 +1,9 @@
 /* WBPSC Clerkship Prelims — Mock Test Set 03 (100 Questions) */
-(window.PAPERS=window.PAPERS||{})['set-3']={questions:[
+(window.SETS = window.SETS || {})['set-3'] = {
+  id: 'set-3',
+  title: 'Set 3',
+  minutes: 90,
+  questions:[
 {s:'English',c:'Narration',q:'Change into indirect speech: "Are you coming?" he asked me.',o:['He asked me if I was coming.','He asked me if am I coming.','He told me if I was coming.','He asked me that was I coming.'],a:0,e:'Yes/No interrogatives take "if/whether" followed by assertive word order (subject + verb) in past continuous.'},
 {s:'English',c:'Pronoun',q:'Choose the grammatically correct sentence:',o:['One should do his duty.','One should do one\'s duty.','One should do their duty.','One should do your duty.'],a:1,e:'When "One" is used as an indefinite pronoun subject, its possessive pronoun must be "one\'s".'},
 {s:'English',c:'Article',q:'_____ honest man is respected by all.',o:['No','An','Any','A'],a:1,e:'"Honest" begins with a silent "h" and a vowel sound, so it takes the indefinite article "An".'},

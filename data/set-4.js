@@ -1,5 +1,9 @@
 /* WBPSC Clerkship Prelims — Mock Test Set 04 (100 Questions) */
-(window.PAPERS=window.PAPERS||{})['set-4']={questions:[
+(window.SETS = window.SETS || {})['set-4'] = {
+  id: 'set-4',
+  title: 'Set 4',
+  minutes: 90,
+  questions:[
 {s:'English',c:'One-word Substitution',q:'One word substitution for: A place where birds are kept',o:['Apiary','Aquarium','Aviary','Zoo'],a:2,e:'An aviary is a large enclosure for keeping birds (whereas an apiary is for bees).'},
 {s:'English',c:'Voice Change',q:'Change into passive voice: People speak English all over the world.',o:['English is being spoken all over the world.','English has been spoken all over the world.','English was spoken all over the world.','English is spoken all over the world.'],a:3,e:'Simple present active (V1) changes to "is/am/are + V3" in passive voice; vague agent "people" is omitted.'},
 {s:'English',c:'Idioms & Phrases',q:'Choose the correct meaning of the idiom/phrase: Under the weather',o:['Feeling ill','Very cold','Very happy','In the rain'],a:0,e:'"Under the weather" means feeling slightly unwell, sick, or in low spirits.'},

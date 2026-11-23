@@ -1,5 +1,9 @@
 /* WBPSC Clerkship Prelims — Mock Test Set 05 (100 Questions) */
-(window.PAPERS=window.PAPERS||{})['set-5']={questions:[
+(window.SETS = window.SETS || {})['set-5'] = {
+  id: 'set-5',
+  title: 'Set 5',
+  minutes: 90,
+  questions:[
 {s:'English',c:'One-word Substitution',q:'One word substitution for: A man who is not married',o:['Widower','Orphan','Bachelor','Hermit'],a:2,e:'A bachelor is an unmarried man.'},
 {s:'English',c:'Narration',q:'Change into indirect speech: She said, "I am writing a letter now."',o:['She said that she is writing a letter now.','She said that she was writing a letter then.','She said that she was writing a letter now.','She said that I was writing a letter then.'],a:1,e:'Present continuous ("am writing") shifts to past continuous ("was writing") and "now" changes to "then".'},
 {s:'English',c:'Idioms & Phrases',q:'Choose the correct meaning of the idiom/phrase: A bolt from the blue',o:['A flash of lightning','A planned event','A sudden surprise','Good news'],a:2,e:'"A bolt from the blue" refers to a sudden, completely unexpected event or shock.'},

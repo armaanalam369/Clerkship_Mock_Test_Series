@@ -1,5 +1,9 @@
 /* WBPSC Clerkship Prelims — Mock Test Set 02 (100 Questions) */
-(window.PAPERS=window.PAPERS||{})['set-2']={questions:[
+(window.SETS = window.SETS || {})['set-2'] = {
+  id: 'set-2',
+  title: 'Set 2',
+  minutes: 90,
+  questions:[
 {s:'English',c:'Synonyms',q:'Choose the word nearest in meaning to: Frugal',o:['Thrifty','Greedy','Generous','Wasteful'],a:0,e:'Frugal means economical or thrifty with money and resources.'},
 {s:'English',c:'Voice Change',q:'Change into passive voice: He has completed the work.',o:['The work is completed by him.','The work was completed by him.','The work has been completed by him.','The work had been completed by him.'],a:2,e:'Present perfect active (has + V3) changes to has been + V3 in passive voice.'},
 {s:'English',c:'One-word Substitution',q:'One word substitution for: A medicine that cures all diseases',o:['Panacea','Placebo','Antidote','Tonic'],a:0,e:'Panacea means a universal remedy or cure for all diseases.'},

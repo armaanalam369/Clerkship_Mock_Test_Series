@@ -36,7 +36,7 @@ window.RULES = {
     { n: 'Physics',                    i: '⚛️', k: 'PHY'  },
     { n: 'Indian National Movement',   i: '🇮🇳', k: 'INM'  },
     { n: 'Chemistry',                  i: '🧪',  k: 'CHE'  },
-    { n: 'World & Physical Geography', i: '🌍',  k: 'WPG'  },
+    { n: 'Physical Geography', i: '🌍',  k: 'PGEO'  },
     { n: 'General Science',                    i: '🧬',  k: 'SCI'  },
     { n: 'Modern History',             i: '📜',  k: 'MOD'  },
     { n: 'Arts & Culture',             i: '🎭',  k: 'ART'  },

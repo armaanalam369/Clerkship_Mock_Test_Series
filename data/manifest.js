@@ -33,13 +33,11 @@ window.RULES = {
     { n: 'Ancient History',            i: '🏺',  k: 'ANCIENT HIST'  },
     { n: 'Indian Economy',             i: '💹',  k: 'ECONOMY'  },
     { n: 'Medieval History',           i: '🏰',  k: 'MEDIEVAL HIST'  },
-    { n: 'Physical Geography', i: '🌍',  k: 'PGEO'  },
+    { n: 'Physical Geography', i: '🌍',  k: 'PHYSICAL GEO'  },
     { n: 'General Science',                    i: '🧬',  k: 'SCIENCE'  },
     { n: 'Modern History',             i: '📜',  k: 'MODERN HIST'  },
-    { n: 'Arts & Culture',             i: '🎭',  k: 'ART'  },
-    { n: 'Indian Geography',           i: '🗺️', k: 'IGEO'  },
+    { n: 'Indian Geography',           i: '🗺️', k: 'INDIAN GEO'  },
     { n: 'West Bengal Specific',       i: '🐅',  k: 'WB SPECIFIC'   },
-    { n: 'Environmental Studies',      i: '🌱',  k: 'ENV'  },
     { n: 'Mathematics',     i: '🧠',  k: 'MATHS'  },
     { n: 'GK & Current Affairs',            i: '📰',  k: 'GK & CA'   }
   ]
@@ -86,7 +84,17 @@ window.SET_LIST = [
   { id: 'set-37', title: 'Set 37', file: 'data/set-37.js' },
   { id: 'set-38', title: 'Set 38', file: 'data/set-38.js' },
   { id: 'set-39', title: 'Set 39', file: 'data/set-39.js' },
-  { id: 'set-40', title: 'Set 40', file: 'data/set-40.js' }
+  { id: 'set-40', title: 'Set 40', file: 'data/set-40.js' },
+  { id: 'set-41', title: 'Set 41', file: 'data/set-41.js' },
+  { id: 'set-42', title: 'Set 42', file: 'data/set-42.js' },
+  { id: 'set-43', title: 'Set 43', file: 'data/set-43.js' },
+  { id: 'set-44', title: 'Set 44', file: 'data/set-44.js' },
+  { id: 'set-45', title: 'Set 45', file: 'data/set-45.js' },
+  { id: 'set-46', title: 'Set 46', file: 'data/set-46.js' },
+  { id: 'set-47', title: 'Set 47', file: 'data/set-47.js' },
+  { id: 'set-48', title: 'Set 48', file: 'data/set-48.js' },
+  { id: 'set-49', title: 'Set 49', file: 'data/set-49.js' },
+  { id: 'set-50', title: 'Set 50', file: 'data/set-50.js' }
 ];
 
 /* ---- Motivational quotes (one per day). Add your own! ---- */

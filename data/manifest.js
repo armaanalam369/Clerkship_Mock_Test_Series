@@ -55,7 +55,12 @@ window.SET_LIST = [
   { id: 'set-2', title: 'Set 2', file: 'data/set-2.js' },
   { id: 'set-3', title: 'Set 3', file: 'data/set-3.js' },
   { id: 'set-4', title: 'Set 4', file: 'data/set-4.js' },
-  { id: 'set-5', title: 'Set 5', file: 'data/set-5.js' }
+  { id: 'set-5', title: 'Set 5', file: 'data/set-5.js' },
+    { id: 'set-6', title: 'Set 6', file: 'data/set-6.js' },
+  { id: 'set-7', title: 'Set 7', file: 'data/set-7.js' },
+  { id: 'set-8', title: 'Set 8', file: 'data/set-8.js' },
+  { id: 'set-9', title: 'Set 9', file: 'data/set-9.js' },
+  { id: 'set-10', title: 'Set 10', file: 'data/set-10.js' }
 ];
 
 /* ---- Motivational quotes (one per day). Add your own! ---- */

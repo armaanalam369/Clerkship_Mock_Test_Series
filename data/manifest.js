@@ -53,7 +53,9 @@ window.RULES = {
 window.SET_LIST = [
   { id: 'set-1', title: 'Set 1', file: 'data/set-1.js' },
   { id: 'set-2', title: 'Set 2', file: 'data/set-2.js' },
-  { id: 'set-3', title: 'Set 3', file: 'data/set-3.js' }
+  { id: 'set-3', title: 'Set 3', file: 'data/set-3.js' },
+  { id: 'set-4', title: 'Set 4', file: 'data/set-4.js' },
+  { id: 'set-5', title: 'Set 5', file: 'data/set-5.js' }
 ];
 
 /* ---- Motivational quotes (one per day). Add your own! ---- */
